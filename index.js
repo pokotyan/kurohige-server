@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const _ = require('lodash');
 const app = express();
 const { redisSet, redisGet } = require('./utils/redis')
 
@@ -36,6 +37,18 @@ io.on('connection', (socket) => {
     const selectedBox = await updateSelectedBox({ boxId, userId }) || [];
 
     socket.emit('updateSelected:receive', JSON.parse(selectedBox));
+  });
+
+  socket.on('getRooms', async () => {
+    const rooms = await getRooms();
+
+    socket.emit('getRooms:receive', rooms);    
+  });
+
+  socket.on('createRoom', async ({ roomId }) => {
+    const rooms = await createRoom(roomId);
+
+    socket.broadcast.emit(`broadCastRooms:receive`, rooms);
   });
 });
 
@@ -75,4 +88,22 @@ async function getSelectedBox(userId) {
   const selectedBox = await redisGet(`next-web-socket:selectedBox:${userId}`);
 
   return JSON.parse(selectedBox) || [];
+}
+
+async function getRooms() {
+  const rooms = await redisGet('next-web-socket:rooms');
+
+  return JSON.parse(rooms) || [];
+}
+
+async function createRoom(roomId) {
+  let rooms = await getRooms();
+
+  rooms = _.uniq([...rooms, roomId])
+
+  await redisSet(`next-web-socket:rooms`, JSON.stringify(rooms));
+
+  const updatedRooms = await getRooms();
+
+  return updatedRooms;
 }
